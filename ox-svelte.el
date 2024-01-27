@@ -125,7 +125,10 @@ class inside a <pre> tag."
                      (latex-fragment . org-svelte-latex-fragment)
                      (src-block . org-svelte-src-block)
                      (inner-template . org-svelte-inner-template)
-                     (template . org-svelte-template)))
+                     (template . org-svelte-template))
+  :options-alist '( ; Overriding HTML options
+                   (:html-doctype "HTML_DOCTYPE" nil "html5")
+                   (:html-html5-fancy nil nil t)))
 
 (defun org-svelte--convert-to-raw-string (string)
   "Convert STRING to a JavaScript raw string.
