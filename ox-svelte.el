@@ -69,11 +69,6 @@ And the generated Svelte file will contain the following import statement:
   "export const metadata = %s;"
   "Format string that will be used to generate the metadata.")
 
-(defcustom org-svelte-metadata-date-as-object t
-  "Whether to export the date as a JavaScript Date object."
-  :group 'org-export-svelte
-  :type 'boolean)
-
 (defconst org-svelte--module-context-script-regexp
   "<script context=\"module\">"
   "Regexp that matches the opening tag of the module-context script.")
@@ -213,11 +208,9 @@ INFO is a plist holding contextual information."
         (keywords (plist-get info :keywords))
         (language (plist-get info :language))
         (creator (plist-get info :creator)))
-    (if org-svelte-metadata-date-as-object
-        (setq date (format
-                    "new Date('%s')"
-                    (format-time-string "%Y-%m-%d" (plist-get :raw-value date))))
-      (setq date (plist-get :raw-value date)))
+    ;; Convert the timestamp format so that JS can understand
+    (setq date (format-time-string "%Y-%m-%d"
+                                   (plist-get date :raw-value)))
     (format org-svelte-metadata-format
             (json-encode `((title . ,(car title))
                            (subtitle . ,(car subtitle))
