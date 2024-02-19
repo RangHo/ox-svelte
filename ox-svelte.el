@@ -200,21 +200,18 @@ INFO is a plist holding contextual information."
 (defun org-svelte--generate-metadata-export (info)
   "Return a JSON string containing the metadata of the current Org file.
 INFO is a plist holding contextual information."
-  (let ((title (plist-get info :title))
-        (subtitle (plist-get info :subtitle))
-        (author (plist-get info :author))
-        (date (plist-get info :date))
+  (let ((title (org-export-data (plist-get info :title) info))
+        (subtitle (org-export-data (plist-get info :subtitle) info))
+        (author (org-export-data (plist-get info :author) info))
+        (date (org-export-data (org-export-get-date info "%Y-%m-%d") info))
         (description (plist-get info :description))
         (keywords (plist-get info :keywords))
         (language (plist-get info :language))
         (creator (plist-get info :creator)))
-    ;; Convert the timestamp format so that JS can understand
-    (setq date (format-time-string "%Y-%m-%d"
-                                   (plist-get date :raw-value)))
     (format org-svelte-metadata-format
-            (json-encode `((title . ,(car title))
-                           (subtitle . ,(car subtitle))
-                           (author . ,(car author))
+            (json-encode `((title . ,title)
+                           (subtitle . ,subtitle)
+                           (author . ,author)
                            (date . ,date)
                            (description . ,description)
                            (keywords . ,keywords)
