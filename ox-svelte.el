@@ -73,6 +73,16 @@ And the generated Svelte file will contain the following import statement:
   "<script context=\"module\">"
   "Regexp that matches the opening tag of the module-context script.")
 
+(defcustom org-svelte-id-attribute-type
+  nil
+  "Type of ID attribute to use in the generated Svelte code.
+
+This option can be nil (the default) or t to remove all ID attributes or to use
+the default ID generation algorithm."
+  :group 'org-export-svelte
+  :type '(choice (const :tag "Default" nil)
+                 (const :tag "Remove all" t)))
+
 (defcustom org-svelte-latex-environment-format
   "{@html %s}"
   "Format string that will be used to generate the LaTeX environment.
@@ -239,7 +249,13 @@ INFO is a plist holding contextual information."
   "Return body of document after converting it to Svelte.
 CONTENTS is the transcoded contents string.  INFO is a plist holding export
 options."
-  contents)
+  (let* ((contents (if (not org-svelte-id-attribute-type)
+                       (replace-regexp-in-string
+                        " id=\"[[:alpha:]-]*org[[:alnum:]]\\{7\\}\""
+                        ""
+                        contents t)
+                     contents)))
+    contents))
 
 (defun org-svelte-template (contents info)
   "Return complete document string after Svelte conversion.
