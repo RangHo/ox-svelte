@@ -116,10 +116,11 @@ class inside a <pre> tag."
                     (?s "As Svelte file"
                         (lambda (a s v _b)
                           (org-svelte-export-to-svelte a s v)))))
-  :translate-alist '((latex-environment . org-svelte-latex-environment)
+  :translate-alist '((export-snippet . org-svelte-export-snippet)
+                     (inner-template . org-svelte-inner-template)
+                     (latex-environment . org-svelte-latex-environment)
                      (latex-fragment . org-svelte-latex-fragment)
                      (src-block . org-svelte-src-block)
-                     (inner-template . org-svelte-inner-template)
                      (template . org-svelte-template))
   :options-alist '( ; Overriding HTML options
                    (:html-doctype "HTML_DOCTYPE" nil "html5")
@@ -149,6 +150,13 @@ Where the result would be:
                                                    "\\\\${"
                                                    escaped-string)))
     (format "String.raw`%s`" escaped-string)))
+
+(defun org-svelte-export-snippet (export-snippet _contents _info)
+  "Transcode an EXPORT-SNIPPET element from Org to Svelte.
+CONTENTS is nil.  INFO is a plist holding contextual information."
+  (when (or (eq (org-export-snippet-backend export-snippet) 'svelte)
+            (eq (org-export-snippet-backend export-snippet) 'html))
+    (org-element-property :value export-snippet)))
 
 (defun org-svelte-latex-environment (latex-environment _contents info)
   "Transcode a LATEX-ENVIRONMENT element from Org to Svelte.
