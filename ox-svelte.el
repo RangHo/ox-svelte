@@ -61,6 +61,21 @@ And the generated Svelte file will contain the following import statement:
   :type '(repeat (cons (string "Component name")
                        (string "Component path"))))
 
+(defcustom org-svelte-raw-script-content
+  ""
+  "JavaScript code that will be included in the module context script verbatim.
+
+The content of this variable will be inserted right after the generated import
+statements.  It must contain a valid JavaScript code, as this Emacs module will
+perform no validation.
+
+In the similar sense, it is highly recommended that you always use semicolons
+at least for this section.  Your script, combined with automatically generated
+import statements and metadata storage, may be parsed unexpectedly if you rely
+on JavaScript semicolon correction mechanism."
+  :group 'org-export-svelte
+  :type 'string)
+
 (defconst org-svelte--component-import-format
   "import %s from '%s';"
   "Format string that will be used to generate the import statement.")
@@ -241,8 +256,9 @@ INFO is a plist holding contextual information."
 INFO is a plist holding contextual information."
   (let ((imports (org-svelte--generate-imports info))
         (metadata (org-svelte--generate-metadata-export info)))
-    (format "<script context=\"module\">\n%s\n%s\n</script>\n"
+    (format "<script context=\"module\">\n%s\n%s\n%s\n</script>\n"
             imports
+            org-svelte-raw-script-content
             metadata)))
 
 (defun org-svelte-inner-template (contents _info)
