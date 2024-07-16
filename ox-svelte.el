@@ -32,10 +32,39 @@
 (require 'ox)
 (require 'ox-html)
 
+;; ---------------------------------------------------------------------
+;; Constants and Variables
+;; ---------------------------------------------------------------------
+
+(defconst org-svelte--component-import-format
+  "import %s from '%s';"
+  "Format string that will be used to generate the import statement.")
+
+(defconst org-svelte--metadata-export-format
+  "export const metadata = %s;"
+  "Format string that will be used to generate the metadata.")
+
+(defconst org-svelte--module-context-script-regexp
+  "<script context=\"module\">"
+  "Regexp that matches the opening tag of the module-context script.")
+
 (defgroup org-export-svelte nil
   "Options for exporting Org mode files to Svelte."
   :tag "Org Export Svelte"
   :group 'org-export)
+
+(defcustom org-svelte-anchor-format
+  "<a id=\"%s\" href=\"%s\">%s</a>"
+  "Format string that will be used to generate the anchor link.
+
+The format should contain three \"%s\" specifiers.  The first specifier will be
+replaced with the ID of the anchor, the second specifier will be replaced with
+the URL of the anchor, and the third specifier will be replaced with the text
+of the anchor.
+
+By default, the anchor will be rendered using the \"a\" tag."
+  :group 'org-export-svelte
+  :type 'string)
 
 (defcustom org-svelte-component-import-alist
   nil
@@ -48,11 +77,11 @@ using a custom component to render LaTeX fragments).
 
 If this list is nil, no components will be imported.
 
-For example, if you want to import a component named `LaTeX' from the path
-`./components/LaTeX.svelte', you can set this variable as follows:
+For example, if you want to import a component named \"LaTeX\" from the path
+\"./components/LaTeX.svelte\", you can set this variable as follows:
 
-  (setq org-svelte-component-import-alist
-        \\'((\"LaTeX\" . \"./components/LaTeX.svelte\")))
+    (setq org-svelte-component-import-alist
+          \\'((\"LaTeX\" . \"./components/LaTeX.svelte\")))
 
 And the generated Svelte file will contain the following import statement:
 
@@ -60,6 +89,55 @@ And the generated Svelte file will contain the following import statement:
   :group 'org-export-svelte
   :type '(repeat (cons (string "Component name")
                        (string "Component path"))))
+
+(defcustom org-svelte-id-attribute-type
+  t
+  "Type of ID attribute to use in the generated Svelte code.
+
+This option can be either t or nil.
+
+    - To keep the original generated variables, use t.
+    - To remove ID attributes at all, use nil.
+
+By default, the original ID attributes will be used."
+  :group 'org-export-svelte
+  :type '(choice (const :tag "Default" t)
+                 (const :tag "Remove all" nil)))
+
+(defcustom org-svelte-image-format
+  "<img id=\"%s\" src=\"%s\" alt=\"%s\" />"
+  "Format string that will be used to generate the image link.
+
+The format should contain three \"%s\" specifiers.  The first specifier will be
+replaced with the ID of the image, the second specifier will be replaced with
+the URL of the image, and the third specifier will be replaced with the alt text
+of the image.
+
+By default, the image will be rendered using the \"img\" tag."
+  :group 'org-export-svelte
+  :type 'string)
+
+(defcustom org-svelte-latex-environment-format
+  "{@html %s}"
+  "Format string that will be used to generate the LaTeX environment.
+
+The format string should contain a single \"%s\" specifier, which will be
+replaced with the LaTeX environment's source code as a JavaScript raw string.
+
+By default, the source code will be printed as a raw HTML string."
+  :group 'org-export-svelte
+  :type 'string)
+
+(defcustom org-svelte-latex-fragment-format
+  "{@html %s}"
+  "Format string that will be used to generate the LaTeX fragment.
+
+The format string should contain a single \"%s\" specifier, which will be
+replaced with the LaTeX fragment's source code as a JavaScript raw string.
+
+By default, the source code will be printed as a raw HTML string."
+  :group 'org-export-svelte
+  :type 'string)
 
 (defcustom org-svelte-raw-script-content
   ""
@@ -76,62 +154,95 @@ on JavaScript semicolon correction mechanism."
   :group 'org-export-svelte
   :type 'string)
 
-(defconst org-svelte--component-import-format
-  "import %s from '%s';"
-  "Format string that will be used to generate the import statement.")
-
-(defconst org-svelte-metadata-format
-  "export const metadata = %s;"
-  "Format string that will be used to generate the metadata.")
-
-(defconst org-svelte--module-context-script-regexp
-  "<script context=\"module\">"
-  "Regexp that matches the opening tag of the module-context script.")
-
-(defcustom org-svelte-id-attribute-type
-  nil
-  "Type of ID attribute to use in the generated Svelte code.
-
-This option can be nil (the default) or t to remove all ID attributes or to use
-the default ID generation algorithm."
-  :group 'org-export-svelte
-  :type '(choice (const :tag "Default" nil)
-                 (const :tag "Remove all" t)))
-
-(defcustom org-svelte-latex-environment-format
-  "{@html %s}"
-  "Format string that will be used to generate the LaTeX environment.
-
-The format string should contain a single `%s' specifier, which will be replaced
-with the LaTeX environment's source code as a JavaScript raw string.
-
-By default, the source code will be printed as a raw HTML string."
-  :group 'org-export-svelte
-  :type 'string)
-
-(defcustom org-svelte-latex-fragment-format
-  "{@html %s}"
-  "Format string that will be used to generate the LaTeX fragment.
-
-The format string should contain a single `%s' specifier, which will be replaced
-with the LaTeX fragment's source code as a JavaScript raw string.
-
-By default, the source code will be printed as-is."
-  :group 'org-export-svelte
-  :type 'string)
-
 (defcustom org-svelte-src-block-format
   "<pre><code class=\"language-%s\">{@html %s.replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</code></pre>"
   "Format string that will be used to generate the source block.
 
-The format string should contain two `%s' specifiers.  The first specifier will
-be replaced with the language of the source block, and the second specifier will
-be replaced with the source code of the source block as a JavaScript raw string.
+The format string should contain two \"%s\" specifiers.  The first specifier
+will be replaced with the language of the source block, and the second specifier
+will be replaced with the source code of the source block as a JavaScript raw
+string.
 
-By default, the source code will be encosed in a <code> tag with the language
-class inside a <pre> tag."
+By default, the source code will be encosed in a \"code\" tag with the language
+class inside a \"pre\" tag."
   :group 'org-export-svelte
   :type 'string)
+
+(defcustom org-svelte-verbose
+  nil
+  "Non-nil means be more verbose during export."
+  :group 'org-export-svelte
+  :type 'boolean)
+
+;; ---------------------------------------------------------------------
+;; Utility Functions
+;; ---------------------------------------------------------------------
+
+(defun org-svelte--message (&rest args)
+  "Display a message with ARGS if `org-svelte-verbose' is non-nil."
+  (when org-svelte-verbose
+    (apply #'message args)))
+
+(defun org-svelte--convert-to-raw-string (string)
+  "Convert STRING to a JavaScript raw string.
+
+This function converts the given string to a JavaScript raw template string.
+The result of this function, therefore, can be inserted where a JavaScript
+value is appropriate.
+
+This function expects a standalone string that does not depend on any string
+interpolation.  Every instance of backticks and substitution markers will be
+escaped accordingly.
+
+For example, one could use this function to insert a string into a JavaScript:
+    (format \"const str = %s;\"
+            (org-svelte--convert-to-raw-string \"Hello, World!\")
+
+Where the result would be:
+  const str = String.raw`Hello, World!`;"
+  (let* ((escaped-string
+          (replace-regexp-in-string "`" "\\`" string))
+         (escaped-string
+          (replace-regexp-in-string "\\${" "\\\\${" escaped-string)))
+    (format "String.raw`%s`" escaped-string)))
+
+(defun org-svelte--format-anchor (id href inner-text)
+  "Return an anchor element with the given ID, HREF, and INNER-TEXT."
+  (format org-svelte-anchor-format id href inner-text))
+
+(defun org-svelte--format-image (id src alt)
+  "Return an image element with the given ID, SRC, and ALT."
+  (format org-svelte-image-format id src alt))
+
+(defun org-svelte--format-module-context-script (info)
+  "Generate the module-context script that imports assets and exports metadata.
+INFO is a plist holding contextual information."
+  (let* ((imports-list
+          (mapcar (lambda (component)
+                    (format org-svelte--component-import-format
+                            (car component)
+                            (cdr component)))
+                  org-svelte-component-import-alist))
+         (imports-string
+          (string-join imports-list "\n"))
+         (metadata-json
+          (json-encode `((title . ,(org-export-data (plist-get info :title) info))
+                         (subtitle . ,(org-export-data (plist-get info :subtitle) info))
+                         (author . ,(org-export-data (plist-get info :author) info))
+                         (date . ,(org-export-data (org-export-get-date info "%Y-%m-%d") info))
+                         (description . ,(plist-get info :description))
+                         (keywords . ,(plist-get info :keywords))
+                         (language . ,(plist-get info :language))
+                         (creator . ,(plist-get info :creator)))))
+         (metadata-string
+          (format org-svelte--metadata-export-format metadata-json)))
+    (format "<script context=\"module\">\n%s\n%s\n</script>\n"
+            imports-string
+            metadata-string)))
+
+;; ---------------------------------------------------------------------
+;; Backend Definition and Transcoders
+;; ---------------------------------------------------------------------
 
 (org-export-define-derived-backend 'svelte 'html
   :menu-entry '(?S "Export to Svelte"
@@ -147,36 +258,12 @@ class inside a <pre> tag."
                      (keyword . org-svelte-keyword)
                      (latex-environment . org-svelte-latex-environment)
                      (latex-fragment . org-svelte-latex-fragment)
+                     (link . org-svelte-link)
                      (src-block . org-svelte-src-block)
                      (template . org-svelte-template))
   :options-alist '( ; Overriding HTML options
                    (:html-doctype "HTML_DOCTYPE" nil "html5")
                    (:html-html5-fancy nil nil t)))
-
-(defun org-svelte--convert-to-raw-string (string)
-  "Convert STRING to a JavaScript raw string.
-
-This function converts the given string to a JavaScript raw template string.
-The result of this function, therefore, can be inserted where a JavaScript
-value is appropriate.
-
-This function expects a standalone string that does not depend on any string
-interpolation.  Every instance of backticks and substitution markers will be
-escaped accordingly.
-
-For example, one could use this function to insert a string into a JavaScript:
-  (format \"const str = %s;\"
-          (org-svelte--convert-to-raw-string \"Hello, World!\")
-
-Where the result would be:
-  const str = String.raw`Hello, World!`;"
-  (let* ((escaped-string (replace-regexp-in-string "`"
-                                                   "\\`"
-                                                   string))
-         (escaped-string (replace-regexp-in-string "\\${"
-                                                   "\\\\${"
-                                                   escaped-string)))
-    (format "String.raw`%s`" escaped-string)))
 
 (defun org-svelte-export-block (export-block _contents _info)
   "Transcode an EXPORT-BLOCK element from Org to Svelte.
@@ -227,6 +314,49 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
         (format org-svelte-latex-environment-format
                 (org-svelte--convert-to-raw-string (substring frag 2 -2))))))))
 
+(defun org-svelte-link (link desc info)
+  "Transcode a LINK element from Org to Svelte.
+DESC is the description part of the link, or the empty string.  INFO is a plist
+holding contextual information.  See `org-export-data'."
+  (let* ((raw-link (org-element-property :raw-link link))
+         (type (org-element-property :type link))
+         (path (org-element-property :path link))
+         (link-is-url (member type '("http" "https" "ftp" "mailto" "news"))))
+    (org-svelte--message "[org-svelte-link] type: %s" type)
+    (org-svelte--message "[org-svelte-link] path: %s" path)
+    (org-svelte--message "[org-svelte-link] desc: %s" desc)
+    (org-svelte--message "[org-svelte-link] link-is-url: %s" (if link-is-url "yes" "no"))
+    (cond
+     ;; Link type is handled by a special function
+     ((org-export-custom-protocol-maybe link desc 'html info))
+     ;; ID or fuzzy links
+     ((member type '("fuzzy" "id" "custom-id"))
+      (let ((destination
+	     (if (string= type "fuzzy")
+		 (org-export-resolve-fuzzy-link link info)
+	       (org-export-resolve-id-link link info))))
+	(pcase (org-element-type destination)
+	  ;; External file
+	  ('plain-text
+	   (org-svelte--message "[org-svelte-link] processing an external file: %s" raw-link)
+	   (org-svelte--format-anchor "" destination desc)
+	   )
+	  ;; Headline
+	  ('headline
+	   (org-svelte--message "[org-svelte-link] processing a headline: %s" raw-link)))))
+     ;; Inline image
+     ((org-export-inline-image-p link org-html-inline-image-rules)
+      (org-svelte--message "[org-svelte-link] processing an image: %s" raw-link)
+      (org-svelte--format-image "" raw-link ""))
+     ;; External link
+     (path
+      (org-svelte--message "[org-svelte-link] processing an external link: %s" raw-link)
+      (org-svelte--format-anchor "" raw-link (or desc "")))
+     ;; Edge case (e.g. a link without path)
+     (t
+      (org-svelte--message "[org-svelte-link] processing a weird link")
+      (format "<i>%s</i>" desc)))))
+
 (defun org-svelte-src-block (src-block _contents info)
   "Transcode a SRC-BLOCK element from Org to Svelte.
 CONTENTS is nil.  INFO is a plist holding contextual information."
@@ -235,47 +365,6 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
     (format org-svelte-src-block-format
             lang
             (org-svelte--convert-to-raw-string code))))
-
-(defun org-svelte--generate-imports (info)
-  "Generate import statements for components.
-INFO is a plist holding contextual information."
-  (let ((imports (mapcar (lambda (component)
-                           (format org-svelte--component-import-format
-                                   (car component)
-                                   (cdr component)))
-                         org-svelte-component-import-alist)))
-    (string-join imports "\n")))
-
-(defun org-svelte--generate-metadata-export (info)
-  "Return a JSON string containing the metadata of the current Org file.
-INFO is a plist holding contextual information."
-  (let ((title (org-export-data (plist-get info :title) info))
-        (subtitle (org-export-data (plist-get info :subtitle) info))
-        (author (org-export-data (plist-get info :author) info))
-        (date (org-export-data (org-export-get-date info "%Y-%m-%d") info))
-        (description (plist-get info :description))
-        (keywords (plist-get info :keywords))
-        (language (plist-get info :language))
-        (creator (plist-get info :creator)))
-    (format org-svelte-metadata-format
-            (json-encode `((title . ,title)
-                           (subtitle . ,subtitle)
-                           (author . ,author)
-                           (date . ,date)
-                           (description . ,description)
-                           (keywords . ,keywords)
-                           (language . ,language)
-                           (creator . ,creator))))))
-
-(defun org-svelte--module-context-script (info)
-  "Generate the module-context script that imports assets and exports metadata.
-INFO is a plist holding contextual information."
-  (let ((imports (org-svelte--generate-imports info))
-        (metadata (org-svelte--generate-metadata-export info)))
-    (format "<script context=\"module\">\n%s\n%s\n%s\n</script>\n"
-            imports
-            org-svelte-raw-script-content
-            metadata)))
 
 (defun org-svelte-inner-template (contents _info)
   "Return body of document after converting it to Svelte.
@@ -293,7 +382,7 @@ options."
   "Return complete document string after Svelte conversion.
 CONTENTS is the transcoded contents string.  INFO is a plist used as a
 communication channel."
-  (concat (org-svelte--module-context-script info)
+  (concat (org-svelte--format-module-context-script info)
           contents))
 
 ;;;###autoload
