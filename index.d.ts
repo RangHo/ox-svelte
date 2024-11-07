@@ -1,19 +1,19 @@
-import type { SvelteComponent } from 'svelte';
+import type { Component } from 'svelte';
 
 declare module 'ox-svelte' {
-  export type OrgModule = {
-    default: typeof SvelteComponent;
-    metadata: OrgMetadata;
-  };
+  export const OrgComponent: Component<
+    {}, // Props
+    { metadata: OrgMetadata } // Exports
+  >;
 
   export type OrgMetadata = {
-    title: string?;
-    subtitle: string?;
-    author: string?;
-    date: string?;
-    description: string?;
-    keywords: string[]?;
-    language: string?;
-    creator: string?;
+    title: string | undefined;
+    subtitle: string | undefined;
+    author: string | undefined;
+    date: string | undefined;
+    description: string | undefined;
+    keywords: string[] | undefined;
+    language: string | undefined;
+    creator: string | undefined;
   };
 }

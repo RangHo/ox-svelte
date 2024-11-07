@@ -44,9 +44,13 @@
   "export const metadata = %s;"
   "Format string that will be used to generate the metadata.")
 
-(defconst org-svelte--module-context-script-regexp
-  "<script context=\"module\">"
-  "Regexp that matches the opening tag of the module-context script.")
+(defconst org-svelte--script-format
+  "<script>\n%s\n</script>"
+  "Format string that will be used to generate the script.")
+
+(defconst org-svelte--module-script-format
+  "<script module>\n%s\n</script>"
+  "Format string that will be used to generate the module script.")
 
 (defgroup org-export-svelte nil
   "Options for exporting Org mode files to Svelte."
@@ -236,9 +240,9 @@ INFO is a plist holding contextual information."
                          (creator . ,(plist-get info :creator)))))
          (metadata-string
           (format org-svelte--metadata-export-format metadata-json)))
-    (format "<script context=\"module\">\n%s\n%s\n</script>\n"
-            imports-string
-            metadata-string)))
+    (format "%s\n%s\n"
+            (format org-svelte--module-script-format metadata-string)
+            (format org-svelte--script-format imports-string))))
 
 ;; ---------------------------------------------------------------------
 ;; Backend Definition and Transcoders
