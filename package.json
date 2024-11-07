@@ -1,6 +1,6 @@
 {
   "name": "ox-svelte",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Org-mode exporter backend for Svelte components (type definitions)",
   "types": "index.d.ts",
   "author": "RangHo Lee <hello@rangho.me>",
