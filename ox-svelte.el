@@ -74,10 +74,16 @@ By default, the anchor will be rendered using the \"a\" tag."
   nil
   "Alist of components to import in the generated Svelte file.
 
-The `car' of each element is the component name, and the `cdr' is the path to
-the component file relative to the generated Svelte file.  This list is provided
-to import shared components that are used to render certain Org elements (e.g.
-using a custom component to render LaTeX fragments).
+The `car' of each element is the binding name(s) of the imported component, and
+the `cdr' is the module name.  This list is provided to import shared components
+that are used to render certain Org elements (e.g. using a custom component to
+render LaTeX fragments).
+
+The `car' can be either a string or a list of strings.  If it is a string, the
+default export of the specified module will be imported with the given name.  If
+it is a list of strings, the named exports of the specified module will be
+imported.  This module will not perform any validation on the given names, and
+it is up to the user to ensure that the names are valid.
 
 If this list is nil, no components will be imported.
 
@@ -89,10 +95,33 @@ For example, if you want to import a component named \"LaTeX\" from the path
 
 And the generated Svelte file will contain the following import statement:
 
-  import LaTeX from './components/LaTeX.svelte';"
+    import LaTeX from \"./components/LaTeX.svelte\";
+
+If you want to import multiple components from the same module, you can put a
+list of strings as the `car' of the element:
+
+    (setq org-svelte-component-import-alist
+          \\'(((\"LaTeX\" \"CodeBlock\") . \"my-ui-library\")))
+
+And the generated Svelte file will contain the following import statements:
+
+    import { LaTeX, CodeBlock } from \"my-ui-library\";"
   :group 'org-export-svelte
-  :type '(repeat (cons (string "Component name")
-                       (string "Component path"))))
+  :type '(repeat (cons (choice (string :tag "Binding name")
+                               (repeat :tag "Binding names" string))
+                       (string "Module"))))
+
+(defcustom org-svelte-metadata-export-list
+  '(:title :subtitle :description :date :language)
+  "List of keywords or properties to export as metadata.
+
+These opotions will be retrieved from the contextual information property list
+during exports.  While most options will be transcoded as plain strings, some
+keywords have specific transcode functions that represent the data better.  For
+more information, see `org-svelte--extract-metadata-as-json' and \"index.d.ts\"
+type declaration file."
+  :group 'org-export-svelte
+  :type '(repeat symbol))
 
 (defcustom org-svelte-id-attribute-type
   t
@@ -143,6 +172,19 @@ By default, the source code will be printed as a raw HTML string."
   :group 'org-export-svelte
   :type 'string)
 
+(defcustom org-svelte-link-org-files-as-svelte
+  nil
+  "Non-nil means make file links to \"file.org\" point to \"file.svelte\".
+
+When Org mode is exporting an Org file to Svelte, the URL of the file links will
+be placed in the \"href\" attribute of the anchor tag.  However, should other
+Org files be converted to Svelte component without being managed by a
+preprocessor, it is better to convert the file links to Org files to Svelte.
+
+Default is nil, assuming that the user will manage the file links manually."
+  :group 'org-export-svelte
+  :type 'boolean)
+
 (defcustom org-svelte-raw-script-content
   ""
   "JavaScript code that will be included in the module context script verbatim.
@@ -182,11 +224,6 @@ class inside a \"pre\" tag."
 ;; Utility Functions
 ;; ---------------------------------------------------------------------
 
-(defun org-svelte--message (&rest args)
-  "Display a message with ARGS if `org-svelte-verbose' is non-nil."
-  (when org-svelte-verbose
-    (apply #'message args)))
-
 (defun org-svelte--convert-to-raw-string (string)
   "Convert STRING to a JavaScript raw string.
 
@@ -210,6 +247,25 @@ Where the result would be:
           (replace-regexp-in-string "\\${" "\\\\${" escaped-string)))
     (format "String.raw`%s`" escaped-string)))
 
+(defun org-svelte--extract-metadata-as-json (info)
+  "Extract metadata from INFO and return it as a JSON string."
+  (let* ((info-alist
+          (mapcar (lambda (key)
+                    (cons key (plist-get info key)))
+                  org-svelte-metadata-export-list))
+         (info-alist-sanitized
+          (mapcar (lambda (pair)
+                    (cons (substring (symbol-name (car pair)) 1) ; remove the leading colon
+                          (cl-case (car pair)
+                            ((:title :subtitle :description)
+                             (org-export-data (cdr pair) info))
+                            (:date
+                             (org-export-get-date info "%FT%T%z")) ; ISO 8601
+                            (otherwise
+                             (cdr pair)))))
+                  info-alist)))
+    (json-encode info-alist-sanitized)))
+
 (defun org-svelte--format-anchor (id href inner-text)
   "Return an anchor element with the given ID, HREF, and INNER-TEXT."
   (format org-svelte-anchor-format id href inner-text))
@@ -224,25 +280,27 @@ INFO is a plist holding contextual information."
   (let* ((imports-list
           (mapcar (lambda (component)
                     (format org-svelte--component-import-format
-                            (car component)
+                            (if (listp (car component))
+                                ;; If the `car' is a list, import the named exports.
+                                (concat "{ " (string-join (car component) ", ") " }")
+                              ;; Otherwise, import the default export.
+                              (car component))
                             (cdr component)))
                   org-svelte-component-import-alist))
          (imports-string
           (string-join imports-list "\n"))
          (metadata-json
-          (json-encode `((title . ,(org-export-data (plist-get info :title) info))
-                         (subtitle . ,(org-export-data (plist-get info :subtitle) info))
-                         (author . ,(org-export-data (plist-get info :author) info))
-                         (date . ,(org-export-data (org-export-get-date info "%Y-%m-%d") info))
-                         (description . ,(plist-get info :description))
-                         (keywords . ,(plist-get info :keywords))
-                         (language . ,(plist-get info :language))
-                         (creator . ,(plist-get info :creator)))))
+          (org-svelte--extract-metadata-as-json info))
          (metadata-string
           (format org-svelte--metadata-export-format metadata-json)))
     (format "%s\n%s\n"
             (format org-svelte--module-script-format metadata-string)
             (format org-svelte--script-format imports-string))))
+
+(defun org-svelte--message (&rest args)
+  "Display a message with ARGS if `org-svelte-verbose' is non-nil."
+  (when org-svelte-verbose
+    (apply #'message args)))
 
 ;; ---------------------------------------------------------------------
 ;; Backend Definition and Transcoders
@@ -265,8 +323,18 @@ INFO is a plist holding contextual information."
                      (link . org-svelte-link)
                      (src-block . org-svelte-src-block)
                      (template . org-svelte-template))
-  :options-alist '( ; Overriding HTML options
-                   (:html-doctype "HTML_DOCTYPE" nil "html5")
+  :options-alist '( ; Export options
+                   (:title "TITLE" nil nil space)
+                   (:subtitle "SUBTITLE" nil nil space)
+                   (:description "DESCRIPTION" nil nil space)
+                   (:author "AUTHOR" nil user-full-name parse)
+                   (:email "EMAIL" nil user-mail-address parse)
+                   (:date "DATE" nil nil parse)
+                   (:creator "CREATOR" nil org-export-creator-string)
+                   (:category "CATEGORY" nil nil parse)
+                   (:tags "TAGS" nil nil parse)
+                   ;; HTML option overrides
+                   (:html-doctype nil nil "html5")
                    (:html-html5-fancy nil nil t)))
 
 (defun org-svelte-export-block (export-block _contents _info)
