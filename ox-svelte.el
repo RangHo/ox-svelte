@@ -123,20 +123,6 @@ type declaration file."
   :group 'org-export-svelte
   :type '(repeat symbol))
 
-(defcustom org-svelte-id-attribute-type
-  t
-  "Type of ID attribute to use in the generated Svelte code.
-
-This option can be either t or nil.
-
-    - To keep the original generated variables, use t.
-    - To remove ID attributes at all, use nil.
-
-By default, the original ID attributes will be used."
-  :group 'org-export-svelte
-  :type '(choice (const :tag "Default" t)
-                 (const :tag "Remove all" nil)))
-
 (defcustom org-svelte-image-format
   "<img id=\"%s\" src=\"%s\" alt=\"%s\" />"
   "Format string that will be used to generate the image link.
@@ -214,6 +200,12 @@ class inside a \"pre\" tag."
   :group 'org-export-svelte
   :type 'string)
 
+(defcustom org-svelte-stable-reference
+  nil
+  "Non-nil means use stable references instead of the default randomized ones."
+  :group 'org-export-svelte
+  :type 'boolean)
+
 (defcustom org-svelte-verbose
   nil
   "Non-nil means be more verbose during export."
@@ -266,6 +258,14 @@ Where the result would be:
                   info-alist)))
     (json-encode info-alist-sanitized)))
 
+(defun org-svelte--extract-reference (datum)
+  "Extract the reference from DATUM and return it as a string."
+  (or (org-element-property :CUSTOM_ID datum)
+      (let ((raw-value (org-element-property :raw-value datum)))
+        (if (stringp raw-value)
+            (org-svelte--to-kebab-case raw-value)
+          ""))))
+
 (defun org-svelte--format-anchor (id href inner-text)
   "Return an anchor element with the given ID, HREF, and INNER-TEXT."
   (format org-svelte-anchor-format id href inner-text))
@@ -301,6 +301,34 @@ INFO is a plist holding contextual information."
   "Display a message with ARGS if `org-svelte-verbose' is non-nil."
   (when org-svelte-verbose
     (apply #'message args)))
+
+(defun org-svelte--reference (orig-fun datum info &optional named-only)
+  "Return an appropriate reference for DATUM.
+
+DATUM is an element or a `target' type object.  INFO is the current export
+state, as a plist.
+
+When DATUM is a headline and `org-svelte-stable-reference' is non-nil, return
+the stablized version of the reference based on the content of the headline.
+
+When NAMED-ONLY is non-nil and DATUM nas no NAME keyword, return nil.  This
+doesn't apply to headlines, inline tasks, radio targets, and targets.
+
+This function is an advice around `org-html--reference'.  ORIG-FUN is the
+original function."
+  (if (or (not org-svelte-stable-reference)
+          (not (org-element-type-p datum 'headline))
+          named-only)
+      (funcall orig-fun datum info named-only)
+    (org-svelte--message "[org-svelte--reference] using stable reference")
+    (org-svelte--extract-reference datum)))
+
+(defun org-svelte--to-kebab-case (string)
+  "Convert STRING to kebab-case."
+  (string-trim
+   (replace-regexp-in-string "[^[:alnum:]]" "-" (downcase string))
+   "-+"
+   "-+"))
 
 ;; ---------------------------------------------------------------------
 ;; Backend Definition and Transcoders
@@ -404,26 +432,42 @@ holding contextual information.  See `org-export-data'."
      ;; ID or fuzzy links
      ((member type '("fuzzy" "id" "custom-id"))
       (let ((destination
-	     (if (string= type "fuzzy")
-		 (org-export-resolve-fuzzy-link link info)
-	       (org-export-resolve-id-link link info))))
-	(pcase (org-element-type destination)
-	  ;; External file
-	  ('plain-text
-	   (org-svelte--message "[org-svelte-link] processing an external file: %s" raw-link)
-	   (org-svelte--format-anchor "" destination desc)
-	   )
-	  ;; Headline
-	  ('headline
-	   (org-svelte--message "[org-svelte-link] processing a headline: %s" raw-link)))))
+	         (if (string= type "fuzzy")
+		         (org-export-resolve-fuzzy-link link info)
+	           (org-export-resolve-id-link link info))))
+        (pcase (org-element-type destination)
+          ;; External file
+          ('plain-text
+           (org-svelte--message "[org-svelte-link] processing a plain text: %s" raw-link)
+           (org-svelte--format-anchor
+            (org-html--reference link info)
+            destination desc))
+          ;; Headline
+          ('headline
+           (org-svelte--message "[org-svelte-link] processing a headline: %s" raw-link)
+           (org-svelte--format-anchor
+            (org-html--reference link info)
+            (concat "#"
+                    (or (org-element-property :CUSTOM_ID destination)
+                        (org-html--reference destination info)))
+            desc))
+          (_
+           (org-svelte--message "[org-svelte-link] processing unknown type: %s" type)
+           (org-svelte--message "[org-svelte-link] destination: %s" destination)))))
      ;; Inline image
      ((org-export-inline-image-p link org-html-inline-image-rules)
       (org-svelte--message "[org-svelte-link] processing an image: %s" raw-link)
-      (org-svelte--format-image "" raw-link ""))
+      (org-svelte--format-image
+       (org-html--reference link info)
+       raw-link
+       ""))
      ;; External link
      (path
       (org-svelte--message "[org-svelte-link] processing an external link: %s" raw-link)
-      (org-svelte--format-anchor "" raw-link (or desc "")))
+      (org-svelte--format-anchor
+       (org-html--reference link info)
+       raw-link
+       (or desc "")))
      ;; Edge case (e.g. a link without path)
      (t
       (org-svelte--message "[org-svelte-link] processing a weird link")
@@ -442,13 +486,7 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
   "Return body of document after converting it to Svelte.
 CONTENTS is the transcoded contents string.  INFO is a plist holding export
 options."
-  (let* ((contents (if (not org-svelte-id-attribute-type)
-                       (replace-regexp-in-string
-                        " id=\"[[:alpha:]-]*org[[:alnum:]]\\{7\\}\""
-                        ""
-                        contents t)
-                     contents)))
-    contents))
+  contents)
 
 (defun org-svelte-template (contents info)
   "Return complete document string after Svelte conversion.
@@ -478,12 +516,14 @@ first.
 When optional argument VISIBLE-ONLY is non-nil, don't export
 contents of hidden elements."
   (interactive)
+  (advice-add 'org-html--reference :around #'org-svelte--reference)
   (org-export-to-buffer 'svelte "*Org Svelte Export*"
     async subtreep visible-only nil nil
     (lambda ()
       (if (fboundp 'web-mode)
           (web-mode)
-        (html-mode)))))
+        (html-mode))))
+  (advice-remove 'org-html--reference #'org-svelte--reference))
 
 ;;;###autoload
 (defun org-svelte-export-to-svelte
@@ -506,8 +546,10 @@ first.
 When optional argument VISIBLE-ONLY is non-nil, don't export
 contents of hidden elements."
   (interactive)
+  (advice-add 'org-html--reference :around #'org-svelte--reference)
   (org-export-to-file 'svelte (org-export-output-file-name ".svelte" subtreep)
-    async subtreep visible-only))
+    async subtreep visible-only)
+  (advice-remove 'org-html--reference #'org-svelte--reference))
 
 (provide 'ox-svelte)
 
