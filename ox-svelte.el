@@ -206,6 +206,19 @@ class inside a \"pre\" tag."
   :group 'org-export-svelte
   :type 'boolean)
 
+(defcustom org-svelte-text-markup-alist
+  '((bold . "<b>%s</b>")
+    (code . "<code>%s</code>")
+    (italic . "<i>%s</i>")
+    (strike-through . "<s>%s</s>")
+    (underline . "<u>%s</u>")
+    (verbatim . "<kbd>%s</kbd>"))
+  "Alist of HTML expressions to convert text markup."
+  :group 'org-export-svelte
+  :type '(alist :key-type (symbol :tag "Markup type")
+                :value-type (string :tag "Format string"))
+  :options '(bold code italic strike-through underline verbatim))
+
 (defcustom org-svelte-verbose
   nil
   "Non-nil means be more verbose during export."
@@ -331,7 +344,7 @@ original function."
    "-+"))
 
 ;; ---------------------------------------------------------------------
-;; Backend Definition and Transcoders
+;; Backend Definition
 ;; ---------------------------------------------------------------------
 
 (org-export-define-derived-backend 'svelte 'html
@@ -363,7 +376,12 @@ original function."
                    (:tags "TAGS" nil nil parse)
                    ;; HTML option overrides
                    (:html-doctype nil nil "html5")
-                   (:html-html5-fancy nil nil t)))
+                   (:html-html5-fancy nil nil t)
+                   (:html-text-markup-alist nil nil org-svelte-text-markup-alist)))
+
+;; ---------------------------------------------------------------------
+;; Transcoders
+;; ---------------------------------------------------------------------
 
 (defun org-svelte-export-block (export-block _contents _info)
   "Transcode an EXPORT-BLOCK element from Org to Svelte.
@@ -482,6 +500,10 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
             lang
             (org-svelte--convert-to-raw-string code))))
 
+;; ---------------------------------------------------------------------
+;; Document Body Aggregators
+;; ---------------------------------------------------------------------
+
 (defun org-svelte-inner-template (contents _info)
   "Return body of document after converting it to Svelte.
 CONTENTS is the transcoded contents string.  INFO is a plist holding export
@@ -494,6 +516,10 @@ CONTENTS is the transcoded contents string.  INFO is a plist used as a
 communication channel."
   (concat (org-svelte--format-module-context-script info)
           contents))
+
+;; ---------------------------------------------------------------------
+;; Autoloads
+;; ---------------------------------------------------------------------
 
 ;;;###autoload
 (defun org-svelte-export-as-svelte
