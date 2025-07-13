@@ -411,6 +411,7 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
     (let ((frag (org-remove-indentation
                  (org-element-property :value latex-environment)))
           (label (org-html--reference latex-environment info t)))
+      (org-svelte--message "[org-svelte-latex-environment] processing a LaTeX environment: %s" frag)
       (format org-svelte-latex-environment-format
               (org-svelte--convert-to-raw-string
                (if (org-string-nw-p label)
@@ -424,13 +425,24 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
 CONTENTS is nil.  INFO is a plist holding contextual information."
   (when (plist-get info :with-latex)
     (let ((frag (org-element-property :value latex-fragment)))
-      (cond
-       ((string-match-p "^\\\\(" frag)
-        (format org-svelte-latex-fragment-format
-                (org-svelte--convert-to-raw-string (substring frag 2 -2))))
-       ((string-match-p "^\\\\\\[" frag)
-        (format org-svelte-latex-environment-format
-                (org-svelte--convert-to-raw-string (substring frag 2 -2))))))))
+      (if (string-match-p "^\$" frag)
+          ;; Legacy usage of LaTeX fragment.
+          (cond
+           ((string-match-p "^\$[^$]")
+            (format org-svelte-latex-fragment-format
+                    (org-svelte--convert-to-raw-string (substring frag 1 -1))))
+           ((string-match-p "^\$\$[^$]" frag)
+            (format org-svelte-latex-fragment-format
+                    (org-svelte--convert-to-raw-string (substring frag 2 -2)))))
+        ;; Newer, "proper" usage of LaTeX fragment.
+        (cond
+         ((string-match-p "^\\\\(" frag)
+          (format org-svelte-latex-fragment-format
+                  (org-svelte--convert-to-raw-string (substring frag 2 -2))))
+         ((string-match-p "^\\\\\\[" frag)
+          (org-svelte--message "[org-svelte-latex-fragment] processing a display math fragment: %s" frag)
+          (format org-svelte-latex-environment-format
+                  (org-svelte--convert-to-raw-string (substring frag 2 -2)))))))))
 
 (defun org-svelte-link (link desc info)
   "Transcode a LINK element from Org to Svelte.
