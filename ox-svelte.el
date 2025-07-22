@@ -283,14 +283,6 @@ Where the result would be:
                   info-alist)))
     (json-encode info-alist-sanitized)))
 
-(defun org-svelte--extract-reference (datum)
-  "Extract the reference from DATUM and return it as a string."
-  (or (org-element-property :CUSTOM_ID datum)
-      (let ((raw-value (org-element-property :raw-value datum)))
-        (if (stringp raw-value)
-            (org-svelte--to-kebab-case raw-value)
-          ""))))
-
 (defun org-svelte--format-anchor (id href inner-text)
   "Return an anchor element with the given ID, HREF, and INNER-TEXT."
   (format org-svelte-anchor-format id href inner-text))
@@ -327,34 +319,6 @@ INFO is a plist holding contextual information."
   (when org-svelte-verbose
     (apply #'message args)))
 
-(defun org-svelte--reference (orig-fun datum info &optional named-only)
-  "Return an appropriate reference for DATUM.
-
-DATUM is an element or a `target' type object.  INFO is the current export
-state, as a plist.
-
-When DATUM is a headline and `org-svelte-stable-reference' is non-nil, return
-the stablized version of the reference based on the content of the headline.
-
-When NAMED-ONLY is non-nil and DATUM nas no NAME keyword, return nil.  This
-doesn't apply to headlines, inline tasks, radio targets, and targets.
-
-This function is an advice around `org-html--reference'.  ORIG-FUN is the
-original function."
-  (if (or (not org-svelte-stable-reference)
-          (not (org-element-type-p datum 'headline))
-          named-only)
-      (funcall orig-fun datum info named-only)
-    (org-svelte--message "[org-svelte--reference] using stable reference")
-    (org-svelte--extract-reference datum)))
-
-(defun org-svelte--to-kebab-case (string)
-  "Convert STRING to kebab-case."
-  (string-trim
-   (replace-regexp-in-string "[^[:alnum:]]" "-" (downcase string))
-   "-+"
-   "-+"))
-
 ;; ---------------------------------------------------------------------
 ;; Backend Definition
 ;; ---------------------------------------------------------------------
@@ -389,6 +353,7 @@ original function."
                    ;; HTML option overrides
                    (:html-doctype nil nil "html5")
                    (:html-html5-fancy nil nil t)
+                   (:html-prefer-user-labels nil nil t)
                    (:html-text-markup-alist nil nil org-svelte-text-markup-alist)))
 
 ;; ---------------------------------------------------------------------
@@ -592,8 +557,7 @@ contents of hidden elements."
     (lambda ()
       (if (fboundp 'web-mode)
           (web-mode)
-        (html-mode))))
-  (advice-remove 'org-html--reference #'org-svelte--reference))
+        (html-mode)))))
 
 ;;;###autoload
 (defun org-svelte-export-to-svelte
@@ -616,10 +580,8 @@ first.
 When optional argument VISIBLE-ONLY is non-nil, don't export
 contents of hidden elements."
   (interactive)
-  (advice-add 'org-html--reference :around #'org-svelte--reference)
   (org-export-to-file 'svelte (org-export-output-file-name ".svelte" subtreep)
-    async subtreep visible-only)
-  (advice-remove 'org-html--reference #'org-svelte--reference))
+    async subtreep visible-only))
 
 (provide 'ox-svelte)
 
