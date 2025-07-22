@@ -70,6 +70,18 @@ By default, the anchor will be rendered using the \"a\" tag."
   :group 'org-export-svelte
   :type 'string)
 
+(defcustom org-svelte-broken-link-format
+  "<span class=\"org-broken-link\">%s (broken link)</span>"
+  "Format string that will be used to generate the broken link.
+
+The format should contain a single \"%s\" specifier, which will be replaced with
+the text of the broken link.
+
+By default, the broken link will be rendered using a \"span\" tag with the class
+\"org-broken-link\", which can be styled using CSS."
+  :group 'org-export-svelte
+  :type 'string)
+
 (defcustom org-svelte-component-import-alist
   nil
   "Alist of components to import in the generated Svelte file.
@@ -457,51 +469,71 @@ holding contextual information.  See `org-export-data'."
     (org-svelte--message "[org-svelte-link] desc: %s" desc)
     (org-svelte--message "[org-svelte-link] link-is-url: %s" (if link-is-url "yes" "no"))
     (cond
-     ;; Link type is handled by a special function
+     ;; Link type is handled by a special function.
      ((org-export-custom-protocol-maybe link desc 'html info))
-     ;; ID or fuzzy links
+     ;; Inline image.
+     ((org-export-inline-image-p link org-html-inline-image-rules)
+      (let* ((parent (org-element-parent link))
+             (guardian (if (org-element-type-p parent 'link)
+                           (org-element-parent parent)
+                         parent))
+             (attrs (org-export-read-attribute :attr_html guardian))
+             (alt (or (plist-get attrs :alt) "")))
+        (org-svelte--message "[org-svelte-link] processing an image: %s" raw-link)
+        (org-svelte--format-image
+         (org-html--reference link info)
+         raw-link
+         alt)))
+     ;; ID or fuzzy links.
      ((member type '("fuzzy" "id" "custom-id"))
       (let ((destination
-	         (if (string= type "fuzzy")
-		         (org-export-resolve-fuzzy-link link info)
-	           (org-export-resolve-id-link link info))))
+             (if (string= type "fuzzy")
+                 (org-export-resolve-fuzzy-link link info)
+               (org-export-resolve-id-link link info))))
         (pcase (org-element-type destination)
-          ;; External file
+          ;; External file.
           ('plain-text
-           (org-svelte--message "[org-svelte-link] processing a plain text: %s" raw-link)
+           (org-svelte--message "[org-svelte-link] processing fuzzy link to plain text: %s" raw-link)
            (org-svelte--format-anchor
             (org-html--reference link info)
-            destination desc))
-          ;; Headline
+            destination
+            desc))
+          ;; Headline.
           ('headline
-           (org-svelte--message "[org-svelte-link] processing a headline: %s" raw-link)
+           (org-svelte--message "[org-svelte-link] processing fuzzy link to headline: %s" raw-link)
            (org-svelte--format-anchor
             (org-html--reference link info)
             (concat "#"
                     (or (org-element-property :CUSTOM_ID destination)
                         (org-html--reference destination info)))
             desc))
+          ;; Other generic fuzzy link.
           (_
-           (org-svelte--message "[org-svelte-link] processing unknown type: %s" type)
-           (org-svelte--message "[org-svelte-link] destination: %s" destination)))))
-     ;; Inline image
-     ((org-export-inline-image-p link org-html-inline-image-rules)
-      (org-svelte--message "[org-svelte-link] processing an image: %s" raw-link)
-      (org-svelte--format-image
-       (org-html--reference link info)
-       raw-link
-       ""))
-     ;; External link
-     (path
-      (org-svelte--message "[org-svelte-link] processing an external link: %s" raw-link)
+           (org-svelte--message "[org-svelte-link] processing generic fuzzy link: %s" type)
+           (org-svelte--format-anchor
+            (org-html--reference link info)
+            (concat "#"
+                    (or (org-element-property :CUSTOM_ID destination)
+                        (org-html--reference destination info)))
+            desc)))))
+     ;; External link with description.
+     ((and path desc)
+      (org-svelte--message "[org-svelte-link] processing external link with description: %s" raw-link)
       (org-svelte--format-anchor
        (org-html--reference link info)
        raw-link
-       (or desc "")))
-     ;; Edge case (e.g. a link without path)
-     (t
-      (org-svelte--message "[org-svelte-link] processing a weird link")
-      (format "<i>%s</i>" desc)))))
+       desc))
+     ;; External link without description.
+     (path
+      (org-svelte--message "[org-svelte-link] processing external link without description: %s" raw-link)
+      (org-svelte--format-anchor
+       (org-html--reference link info)
+       raw-link
+       path)
+      ;; Edge case (e.g. link without path).
+      (t
+       (org-svelte--message "[org-svelte-link] processing broken link")
+       (format org-svelte-broken-link-format desc))))))
 
 (defun org-svelte-src-block (src-block _contents info)
   "Transcode a SRC-BLOCK element from Org to Svelte.
