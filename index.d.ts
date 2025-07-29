@@ -5,7 +5,7 @@ declare module 'ox-svelte' {
   export type OrgModule = {
     metadata: OrgMetadata;
     default: Component;
-  }
+  };
   
   /// Metadata extracted from Org file.
   ///
@@ -76,5 +76,5 @@ declare module 'ox-svelte' {
   ///
   /// It differs from the standard ISO 8601 format in that the timezone hour and
   /// minute are not separated by a colon.
-  export type ISO8601 = `${ISO8601Year}-${ISO8601Month}-${ISO8601Day}T${ISO8601Hour}:${ISO8601Minute}:${ISO8601Second}${ISO8601Timezone}`
+  export type ISO8601 = `${ISO8601Year}-${ISO8601Month}-${ISO8601Day}T${ISO8601Hour}:${ISO8601Minute}:${ISO8601Second}${ISO8601Timezone}` & string;
 }
