@@ -414,7 +414,7 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
   (when (plist-get info :with-latex)
     (let ((frag (org-element-property :value latex-fragment)))
       (org-svelte--message "[org-svelte-latex-fragment] processing a LaTeX fragment: %s" frag)
-      (if (string-match-p "^\$.*$" frag)
+      (if (string-prefix-p "$" frag)
           ;; Legacy usage of LaTeX fragment.
           (cond
            ((string-match-p "^\$[^\$]" frag)
