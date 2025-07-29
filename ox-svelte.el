@@ -472,7 +472,7 @@ holding contextual information.  See `org-export-data'."
            (org-svelte--message "[org-svelte-link] processing fuzzy link to plain text: %s" raw-link)
            (org-svelte--format-anchor
             (org-html--reference link info)
-            destination
+            (concat destination "#" org-html--id-attr-prefix path)
             desc))
           ;; Headline.
           ('headline
