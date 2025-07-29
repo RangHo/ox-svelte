@@ -490,18 +490,26 @@ holding contextual information.  See `org-export-data'."
                     (or (org-element-property :CUSTOM_ID destination)
                         (org-html--reference destination info)))
             desc)))))
-     ;; External link with description.
-     ((and path desc)
-      (org-svelte--message "[org-svelte-link] processing external link with description: %s" raw-link)
-      (org-svelte--format-anchor raw-link desc))
-     ;; External link without description.
+     ;; File links.
+     ((string= type "file")
+      (org-svelte--message "[org-svelte-link] processing file link: %s" raw-link)
+      (let* ((relative-path (org-export-file-uri (org-publish-file-relative-name path info)))
+             (file-name (file-name-sans-extension (file-name-nondirectory relative-path)))
+             (search-option (org-element-property :search-option link)))
+        (if (not search-option)
+            (org-svelte--format-anchor relative-path (or desc file-name))
+          (org-svelte--format-anchor
+           (concat relative-path
+                   "#"
+                   (org-publish-resolve-external-link search-option path t))))))
+     ;; External links.
      (path
       (org-svelte--message "[org-svelte-link] processing external link without description: %s" raw-link)
-      (org-svelte--format-anchor raw-link path)
-      ;; Edge case (e.g. link without path).
-      (t
-       (org-svelte--message "[org-svelte-link] processing broken link")
-       (format org-svelte-broken-link-format desc))))))
+      (org-svelte--format-anchor raw-link (or desc path)))
+     ;; Edge case (e.g. link without path).
+     (t
+      (org-svelte--message "[org-svelte-link] processing broken link")
+      (format org-svelte-broken-link-format desc)))))
 
 (defun org-svelte-src-block (src-block _contents info)
   "Transcode a SRC-BLOCK element from Org to Svelte.
