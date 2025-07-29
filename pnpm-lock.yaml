@@ -9,7 +9,7 @@ importers:
   .:
     devDependencies:
       svelte:
-        specifier: ^5.1.9
+        specifier: ^5.0.0
         version: 5.1.9
       typescript:
         specifier: ^5.6.3
