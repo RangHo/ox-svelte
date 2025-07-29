@@ -159,9 +159,20 @@ By default, the source code will be printed as a raw HTML string."
   :group 'org-export-svelte
   :type 'string)
 
-(defcustom org-svelte-latex-fragment-format
+(defcustom org-svelte-latex-display-fragment-format
   "{@html %s}"
-  "Format string that will be used to generate the LaTeX fragment.
+  "Format string that will be used to generate the LaTeX fragment in display mode.
+
+The format string should contain a single \"%s\" specifier, which will be
+replaced with the LaTeX fragment's source code as a JavaScript raw string.
+
+By default, the source code will be printed as a raw HTML string."
+  :group 'org-export-svelte
+  :type 'string)
+
+(defcustom org-svelte-latex-inline-fragment-format
+  "{@html %s}"
+  "Format string that will be used to generate the LaTeX fragment in inline mode.
 
 The format string should contain a single \"%s\" specifier, which will be
 replaced with the LaTeX fragment's source code as a JavaScript raw string.
@@ -402,23 +413,23 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
 CONTENTS is nil.  INFO is a plist holding contextual information."
   (when (plist-get info :with-latex)
     (let ((frag (org-element-property :value latex-fragment)))
-      (if (string-match-p "^\$" frag)
+      (org-svelte--message "[org-svelte-latex-fragment] processing a LaTeX fragment: %s" frag)
+      (if (string-match-p "^\$.*$" frag)
           ;; Legacy usage of LaTeX fragment.
           (cond
-           ((string-match-p "^\$[^$]")
-            (format org-svelte-latex-fragment-format
+           ((string-match-p "^\$[^\$]" frag)
+            (format org-svelte-latex-inline-fragment-format
                     (org-svelte--convert-to-raw-string (substring frag 1 -1))))
-           ((string-match-p "^\$\$[^$]" frag)
-            (format org-svelte-latex-fragment-format
+           ((string-match-p "^\$\\$[^\$]" frag)
+            (format org-svelte-latex-display-fragment-format
                     (org-svelte--convert-to-raw-string (substring frag 2 -2)))))
         ;; Newer, "proper" usage of LaTeX fragment.
         (cond
          ((string-match-p "^\\\\(" frag)
-          (format org-svelte-latex-fragment-format
+          (format org-svelte-latex-inline-fragment-format
                   (org-svelte--convert-to-raw-string (substring frag 2 -2))))
          ((string-match-p "^\\\\\\[" frag)
-          (org-svelte--message "[org-svelte-latex-fragment] processing a display math fragment: %s" frag)
-          (format org-svelte-latex-environment-format
+          (format org-svelte-latex-display-fragment-format
                   (org-svelte--convert-to-raw-string (substring frag 2 -2)))))))))
 
 (defun org-svelte-link (link desc info)
