@@ -58,13 +58,12 @@
   :group 'org-export)
 
 (defcustom org-svelte-anchor-format
-  "<a id=\"%s\" href=\"%s\">%s</a>"
+  "<a href=\"%s\">%s</a>"
   "Format string that will be used to generate the anchor link.
 
-The format should contain three \"%s\" specifiers.  The first specifier will be
-replaced with the ID of the anchor, the second specifier will be replaced with
-the URL of the anchor, and the third specifier will be replaced with the text
-of the anchor.
+The format should contain two \"%s\" specifiers.  The first specifier will be
+replaced with the URL of the anchor, and the third specifier will be replaced
+with the text of the anchor.
 
 By default, the anchor will be rendered using the \"a\" tag."
   :group 'org-export-svelte
@@ -136,13 +135,12 @@ type declaration file."
   :type '(repeat symbol))
 
 (defcustom org-svelte-image-format
-  "<img id=\"%s\" src=\"%s\" alt=\"%s\" />"
+  "<img src=\"%s\" alt=\"%s\" />"
   "Format string that will be used to generate the image link.
 
-The format should contain three \"%s\" specifiers.  The first specifier will be
-replaced with the ID of the image, the second specifier will be replaced with
-the URL of the image, and the third specifier will be replaced with the alt text
-of the image.
+The format should contain two \"%s\" specifiers.  The first specifier will be
+replaced with the URL of the image, and the second specifier will be replaced
+with the alt text of the image.
 
 By default, the image will be rendered using the \"img\" tag."
   :group 'org-export-svelte
@@ -294,13 +292,13 @@ Where the result would be:
                   info-alist)))
     (json-encode info-alist-sanitized)))
 
-(defun org-svelte--format-anchor (id href inner-text)
-  "Return an anchor element with the given ID, HREF, and INNER-TEXT."
-  (format org-svelte-anchor-format id href inner-text))
+(defun org-svelte--format-anchor (href inner-text)
+  "Return an anchor element with the given HREF and INNER-TEXT."
+  (format org-svelte-anchor-format href inner-text))
 
-(defun org-svelte--format-image (id src alt)
-  "Return an image element with the given ID, SRC, and ALT."
-  (format org-svelte-image-format id src alt))
+(defun org-svelte--format-image (src alt)
+  "Return an image element with the given SRC and ALT."
+  (format org-svelte-image-format src alt))
 
 (defun org-svelte--format-module-context-script (info)
   "Generate the module-context script that imports assets and exports metadata.
@@ -456,10 +454,7 @@ holding contextual information.  See `org-export-data'."
              (attrs (org-export-read-attribute :attr_html guardian))
              (alt (or (plist-get attrs :alt) "")))
         (org-svelte--message "[org-svelte-link] processing an image: %s" raw-link)
-        (org-svelte--format-image
-         (org-html--reference link info)
-         raw-link
-         alt)))
+        (org-svelte--format-image raw-link alt)))
      ;; ID or fuzzy links.
      ((member type '("fuzzy" "id" "custom-id"))
       (let ((destination
@@ -471,23 +466,26 @@ holding contextual information.  See `org-export-data'."
           ('plain-text
            (org-svelte--message "[org-svelte-link] processing fuzzy link to plain text: %s" raw-link)
            (org-svelte--format-anchor
-            (org-html--reference link info)
             (concat destination "#" org-html--id-attr-prefix path)
             desc))
           ;; Headline.
           ('headline
            (org-svelte--message "[org-svelte-link] processing fuzzy link to headline: %s" raw-link)
            (org-svelte--format-anchor
-            (org-html--reference link info)
             (concat "#"
                     (or (org-element-property :CUSTOM_ID destination)
                         (org-html--reference destination info)))
-            desc))
+            (cond ((org-string-nw-p desc))
+                  ((org-export-numbered-headline-p destination info)
+                   (mapconcat #'number-to-string
+                              (org-export-get-headline-number destination info)
+                              "."))
+                  (t
+                   (org-export-data (org-element-property :title destination) info)))))
           ;; Other generic fuzzy link.
           (_
            (org-svelte--message "[org-svelte-link] processing generic fuzzy link: %s" type)
            (org-svelte--format-anchor
-            (org-html--reference link info)
             (concat "#"
                     (or (org-element-property :CUSTOM_ID destination)
                         (org-html--reference destination info)))
@@ -495,17 +493,11 @@ holding contextual information.  See `org-export-data'."
      ;; External link with description.
      ((and path desc)
       (org-svelte--message "[org-svelte-link] processing external link with description: %s" raw-link)
-      (org-svelte--format-anchor
-       (org-html--reference link info)
-       raw-link
-       desc))
+      (org-svelte--format-anchor raw-link desc))
      ;; External link without description.
      (path
       (org-svelte--message "[org-svelte-link] processing external link without description: %s" raw-link)
-      (org-svelte--format-anchor
-       (org-html--reference link info)
-       raw-link
-       path)
+      (org-svelte--format-anchor raw-link path)
       ;; Edge case (e.g. link without path).
       (t
        (org-svelte--message "[org-svelte-link] processing broken link")
