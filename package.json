@@ -6,7 +6,12 @@
   "author": "RangHo Lee <hello@rangho.me>",
   "license": "GPL-3.0-or-later",
   "devDependencies": {
-    "svelte": "^5.0.0",
+    "svelte": "^5.1.9"
+  },
+  "peerDependencies": {
+    "svelte": "^5.1.9"
+  },
+  "optionalDependencies": {
     "typescript": "^5.6.3"
   },
   "packageManager": "pnpm@9.10.0+sha512.73a29afa36a0d092ece5271de5177ecbf8318d454ecd701343131b8ebc0c1a91c487da46ab77c8e596d6acf1461e3594ced4becedf8921b074fbd8653ed7051c"

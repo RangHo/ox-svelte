@@ -7,13 +7,14 @@ settings:
 importers:
 
   .:
-    devDependencies:
-      svelte:
-        specifier: ^5.0.0
-        version: 5.1.9
+    optionalDependencies:
       typescript:
         specifier: ^5.6.3
         version: 5.6.3
+    devDependencies:
+      svelte:
+        specifier: ^5.1.9
+        version: 5.1.9
 
 packages:
 
@@ -156,6 +157,7 @@ snapshots:
       magic-string: 0.30.12
       zimmerframe: 1.1.2
 
-  typescript@5.6.3: {}
+  typescript@5.6.3:
+    optional: true
 
   zimmerframe@1.1.2: {}
