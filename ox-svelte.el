@@ -85,12 +85,12 @@ By default, the broken link will be rendered using a \"span\" tag with the class
   nil
   "Alist of components to import in the generated Svelte file.
 
-The `car' of each element is the binding name(s) of the imported component, and
-the `cdr' is the module name.  This list is provided to import shared components
-that are used to render certain Org elements (e.g. using a custom component to
-render LaTeX fragments).
+The `car' of each element is the module name, and the `cdr' is the binding
+name(s) of the imported component.  This list is provided to import shared
+components that are used to render certain Org elements (e.g. using a custom
+component to render LaTeX fragments).
 
-The `car' can be either a string or a list of strings.  If it is a string, the
+The `cdr' can be either a string or a list of strings.  If it is a string, the
 default export of the specified module will be imported with the given name.  If
 it is a list of strings, the named exports of the specified module will be
 imported.  This module will not perform any validation on the given names, and
@@ -102,7 +102,7 @@ For example, if you want to import a component named \"LaTeX\" from the path
 \"./components/LaTeX.svelte\", you can set this variable as follows:
 
     (setq org-svelte-component-import-alist
-          \\'((\"LaTeX\" . \"./components/LaTeX.svelte\")))
+          \\'((\"./components/LaTeX.svelte\" . \"LaTeX\")))
 
 And the generated Svelte file will contain the following import statement:
 
@@ -112,15 +112,15 @@ If you want to import multiple components from the same module, you can put a
 list of strings as the `car' of the element:
 
     (setq org-svelte-component-import-alist
-          \\'(((\"LaTeX\" \"CodeBlock\") . \"my-ui-library\")))
+          \\'((\"my-ui-library\" \"LaTeX\" \"CodeBlock\")))
 
 And the generated Svelte file will contain the following import statements:
 
     import { LaTeX, CodeBlock } from \"my-ui-library\";"
   :group 'org-export-svelte
-  :type '(repeat (cons (choice (string :tag "Binding name")
-                               (repeat :tag "Binding names" string))
-                       (string "Module"))))
+  :type '(repeat (cons (string "Module")
+                       (choice (string :tag "Binding name")
+                               (repeat :tag "Binding names" string)))))
 
 (defcustom org-svelte-metadata-export-list
   '(:title :subtitle :description :date :language)
@@ -306,12 +306,12 @@ INFO is a plist holding contextual information."
   (let* ((imports-list
           (mapcar (lambda (component)
                     (format org-svelte--component-import-format
-                            (if (listp (car component))
-                                ;; If the `car' is a list, import the named exports.
-                                (concat "{ " (string-join (car component) ", ") " }")
+                            (if (listp (cdr component))
+                                ;; If the `cdr' is a list, import the named exports.
+                                (concat "{ " (string-join (cdr component) ", ") " }")
                               ;; Otherwise, import the default export.
-                              (car component))
-                            (cdr component)))
+                              (cdr component))
+                            (car component)))
                   org-svelte-component-import-alist))
          (imports-string
           (string-join imports-list "\n"))
