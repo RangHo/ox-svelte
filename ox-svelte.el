@@ -221,12 +221,6 @@ class inside a \"pre\" tag."
   :group 'org-export-svelte
   :type 'string)
 
-(defcustom org-svelte-stable-reference
-  nil
-  "Non-nil means use stable references instead of the default randomized ones."
-  :group 'org-export-svelte
-  :type 'boolean)
-
 (defcustom org-svelte-text-markup-alist
   '((bold . "<b>%s</b>")
     (code . "<code>%s</code>")
@@ -562,7 +556,6 @@ first.
 When optional argument VISIBLE-ONLY is non-nil, don't export
 contents of hidden elements."
   (interactive)
-  (advice-add 'org-html--reference :around #'org-svelte--reference)
   (org-export-to-buffer 'svelte "*Org Svelte Export*"
     async subtreep visible-only nil nil
     (lambda ()
