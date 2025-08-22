@@ -1,6 +1,6 @@
 {
   "name": "ox-svelte",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Org-mode exporter backend for Svelte components (type definitions)",
   "type": "module",
   "main": "dist/index.js",
