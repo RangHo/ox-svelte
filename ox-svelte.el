@@ -44,12 +44,8 @@
   "export const metadata = %s;"
   "Format string that will be used to generate the metadata.")
 
-(defconst org-svelte--script-format
-  "<script>\n%s\n</script>"
-  "Format string that will be used to generate the script.")
-
 (defconst org-svelte--module-script-format
-  "<script module>\n%s\n</script>"
+  "<script module>\n%s\n%s\n</script>"
   "Format string that will be used to generate the module script.")
 
 (defgroup org-export-svelte nil
@@ -294,7 +290,7 @@ Where the result would be:
   "Return an image element with the given SRC and ALT."
   (format org-svelte-image-format src alt))
 
-(defun org-svelte--format-module-context-script (info)
+(defun org-svelte--format-module-script (info)
   "Generate the module-context script that imports assets and exports metadata.
 INFO is a plist holding contextual information."
   (let* ((imports-list
@@ -313,9 +309,9 @@ INFO is a plist holding contextual information."
           (org-svelte--extract-metadata-as-json info))
          (metadata-string
           (format org-svelte--metadata-export-format metadata-json)))
-    (format "%s\n%s\n"
-            (format org-svelte--module-script-format metadata-string)
-            (format org-svelte--script-format imports-string))))
+    (concat (format org-svelte--module-script-format
+                    metadata-string
+                    imports-string))))
 
 (defun org-svelte--message (&rest args)
   "Display a message with ARGS if `org-svelte-verbose' is non-nil."
@@ -522,13 +518,15 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
   "Return body of document after converting it to Svelte.
 CONTENTS is the transcoded contents string.  INFO is a plist holding export
 options."
+  (org-svelte--message "[org-svelte-inner-template]")
   contents)
 
 (defun org-svelte-template (contents info)
   "Return complete document string after Svelte conversion.
 CONTENTS is the transcoded contents string.  INFO is a plist used as a
 communication channel."
-  (concat (org-svelte--format-module-context-script info)
+  (org-svelte--message "[org-svelte-template]")
+  (concat (org-svelte--format-module-script info)
           contents))
 
 ;; ---------------------------------------------------------------------
@@ -556,6 +554,7 @@ first.
 When optional argument VISIBLE-ONLY is non-nil, don't export
 contents of hidden elements."
   (interactive)
+  (org-svelte--message "[org-svelte-export-to-svelte] exporting as a Svelte file...")
   (org-export-to-buffer 'svelte "*Org Svelte Export*"
     async subtreep visible-only nil nil
     (lambda ()
@@ -584,6 +583,7 @@ first.
 When optional argument VISIBLE-ONLY is non-nil, don't export
 contents of hidden elements."
   (interactive)
+  (org-svelte--message "[org-svelte-export-to-svelte] exporting to a Svelte file...")
   (org-export-to-file 'svelte (org-export-output-file-name ".svelte" subtreep)
     async subtreep visible-only))
 
