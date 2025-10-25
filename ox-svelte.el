@@ -350,7 +350,7 @@ INFO is a plist holding contextual information."
                    (:category "CATEGORY" nil nil parse)
                    (:tags "TAGS" nil nil parse)
                    ;; HTML option overrides
-                   (:html-doctype nil nil "html5")
+                   (:html-doctype nil nil "xhtml5")
                    (:html-html5-fancy nil nil t)
                    (:html-prefer-user-labels nil nil t)
                    (:html-text-markup-alist nil nil org-svelte-text-markup-alist)))
