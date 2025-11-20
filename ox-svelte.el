@@ -48,6 +48,21 @@
   "<script module>\n%s\n%s\n</script>"
   "Format string that will be used to generate the module script.")
 
+(defconst org-svelte--protect-char-alist
+  '(("&" . "&amp;")
+    ("<" . "&lt;")
+    (">" . "&gt;")
+    ("{" . "&lcub;")
+    ("}" . "&rcub;"))
+  "Alist of characters to be converted by `org-svelte--encode-plain-text'.")
+
+(defconst org-svelte--special-string-regexps
+  '(("\\\\-" . "&shy;")
+    ("---\\([^-]\\)" . "&mdash;\\1")
+    ("--\\([^-]\\)" . "&ndash;\\1")
+    ("\\.\\.\\." . "&hellip;"))
+  "Regular expressions for special string conversion.")
+
 (defgroup org-export-svelte nil
   "Options for exporting Org mode files to Svelte."
   :tag "Org Export Svelte"
@@ -204,7 +219,7 @@ on JavaScript semicolon correction mechanism."
   :type 'string)
 
 (defcustom org-svelte-src-block-format
-  "<pre><code class=\"language-%s\">{@html %s.replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</code></pre>"
+  "<pre><code class=\"language-%s\">{@html %s}</code></pre>"
   "Format string that will be used to generate the source block.
 
 The format string should contain two \"%s\" specifiers.  The first specifier
@@ -240,6 +255,13 @@ class inside a \"pre\" tag."
 ;; Utility Functions
 ;; ---------------------------------------------------------------------
 
+(defun org-svelte--convert-special-strings (string)
+  "Convert special characters in STRING to HTML."
+  (dolist (a org-svelte--special-string-regexps string)
+    (let ((re (car a))
+	      (rpl (cdr a)))
+      (setq string (replace-regexp-in-string re rpl string t)))))
+
 (defun org-svelte--convert-to-raw-string (string)
   "Convert STRING to a JavaScript raw string.
 
@@ -262,6 +284,13 @@ Where the result would be:
          (escaped-string
           (replace-regexp-in-string "\\${" "\\\\${" escaped-string)))
     (format "String.raw`%s`" escaped-string)))
+
+(defun org-svelte--encode-plain-text (text)
+  "Convert plain text characters from TEXT to HTML entities.
+Possible conversions are set in `org-svelte--protect-char-alist'."
+  (dolist (pair org-svelte--protect-char-alist text)
+    (setq text (replace-regexp-in-string (car pair) (cdr pair) text t t))))
+
 
 (defun org-svelte--extract-metadata-as-json (info)
   "Extract metadata from INFO and return it as a JSON string."
@@ -330,13 +359,16 @@ INFO is a plist holding contextual information."
                     (?s "As Svelte file"
                         (lambda (a s v _b)
                           (org-svelte-export-to-svelte a s v)))))
-  :translate-alist '((export-block . org-svelte-export-block)
+  :translate-alist '((bold . org-svelte-bold)
+                     (code . org-svelte-code)
+                     (export-block . org-svelte-export-block)
                      (export-snippet . org-svelte-export-snippet)
                      (inner-template . org-svelte-inner-template)
                      (keyword . org-svelte-keyword)
                      (latex-environment . org-svelte-latex-environment)
                      (latex-fragment . org-svelte-latex-fragment)
                      (link . org-svelte-link)
+                     (plain-text . org-svelte-plain-text)
                      (src-block . org-svelte-src-block)
                      (template . org-svelte-template))
   :options-alist '( ; Export options
@@ -349,15 +381,29 @@ INFO is a plist holding contextual information."
                    (:creator "CREATOR" nil org-export-creator-string)
                    (:category "CATEGORY" nil nil parse)
                    (:tags "TAGS" nil nil parse)
+                   ;; Svelte options
+                   (:svelte-text-markup-alist nil nil org-svelte-text-markup-alist)
                    ;; HTML option overrides
                    (:html-doctype nil nil "xhtml5")
                    (:html-html5-fancy nil nil t)
-                   (:html-prefer-user-labels nil nil t)
-                   (:html-text-markup-alist nil nil org-svelte-text-markup-alist)))
+                   (:html-prefer-user-labels nil nil t)))
 
 ;; ---------------------------------------------------------------------
 ;; Transcoders
 ;; ---------------------------------------------------------------------
+
+(defun org-svelte-bold (bold contents info)
+  "Transcode a BOLD element from Org to Svelte.
+CONTENTS is the text with bold markup.  INFO is a plist holding contextual
+information."
+  (format (or (cdr (assq 'bold (plist-get info :svelte-text-markup-alist))) "%s")
+          contents))
+
+(defun org-svelte-code (code _contents info)
+  "Transcode a CODE element from Org to Svelte.
+CONTENTS is nil.  INFO is a plist holding contextual information."
+  (format (or (cdr (assq 'code (plist-get info :svelte-text-markup-alist))) "%s")
+	      (org-svelte--encode-plain-text (org-element-property :value code))))
 
 (defun org-svelte-export-block (export-block _contents _info)
   "Transcode an EXPORT-BLOCK element from Org to Svelte.
@@ -372,6 +418,13 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
   (when (or (eq (org-export-snippet-backend export-snippet) 'svelte)
             (eq (org-export-snippet-backend export-snippet) 'html))
     (org-element-property :value export-snippet)))
+
+(defun org-svelte-italic (_italic contents info)
+  "Transcode an ITALIC element from Org to Svelte.
+CONTENTS is the text with italic markup.  INFO is a plist holding contextual
+information."
+  (format (or (cdr (assq 'italic (plist-get info :svelte-text-markup-alist))) "%s")
+          contents))
 
 (defun org-svelte-keyword (keyword _contents _info)
   "Transcode a KEYWORD element from Org to Svelte.
@@ -501,6 +554,28 @@ holding contextual information.  See `org-export-data'."
       (org-svelte--message "[org-svelte-link] processing broken link")
       (format org-svelte-broken-link-format desc)))))
 
+(defun org-svelte-plain-text (text info)
+  "Transcode a TEXT element from Org to Svelte.
+TEXT is the text to transcode.  INFO is a plist holding contextual
+information.  See `org-export-data'."
+  (let ((output text))
+    ;; Protect reserved characters.
+    (setq output (org-svelte--encode-plain-text output))
+    ;; Handle smart quotes.
+    (when (plist-get info :with-smart-quotes)
+      (setq output (org-export-activate-smart-quotes output :html info text)))
+    ;; Handle special strings.
+    (when (plist-get info :with-special-strings)
+      (setq output (org-svelte--convert-special-strings output)))
+    ;; Handle break preservation if required.
+    (when (plist-get info :preserve-breaks)
+      (setq output
+            (replace-regexp-in-string
+             "\\(\\\\\\\\\\)?[ \t]*\n"
+             (concat (org-html-close-tag "br" nil info) "\n") output)))
+    ;; Return value.
+    output))
+
 (defun org-svelte-src-block (src-block _contents info)
   "Transcode a SRC-BLOCK element from Org to Svelte.
 CONTENTS is nil.  INFO is a plist holding contextual information."
@@ -508,7 +583,29 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
         (code (org-export-format-code-default src-block info)))
     (format org-svelte-src-block-format
             lang
-            (org-svelte--convert-to-raw-string code))))
+            (org-svelte--convert-to-raw-string
+             (org-svelte--encode-plain-text code)))))
+
+(defun org-svelte-strike-through (_strike-through contents info)
+  "Transcode a STRIKE-THROUGH element from Org to Svelte.
+CONTENTS is the text with strike-through markup.  INFO is a plist holding
+contextual information."
+  (format (or (cdr (assq 'strike-through (plist-get info :svelte-text-markup-alist))) "%s")
+          contents))
+
+(defun org-svelte-underline (_underline contents info)
+  "Transcode an UNDERLINE element from Org to Svelte.
+CONTENTS is the text with underline markup.  INFO is a plist holding contextual
+information."
+  (format (or (cdr (assq 'underline (plist-get info :svelte-text-markup-alist))) "%s")
+	  contents))
+
+(defun org-svelte-verbatim (verbatim _contents info)
+  "Transcode a VERBATIM element from Org to Svelte.
+CONTENTS is nil.  INFO is a plist holding contextual
+information."
+  (format (or (cdr (assq 'verbatim (plist-get info :svelte-text-markup-alist))) "%s")
+          (org-svelte--encode-plain-text (org-element-property :value verbatim))))
 
 ;; ---------------------------------------------------------------------
 ;; Document Body Aggregators
