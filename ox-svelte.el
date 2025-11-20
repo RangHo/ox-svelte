@@ -583,8 +583,7 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
         (code (org-export-format-code-default src-block info)))
     (format org-svelte-src-block-format
             lang
-            (org-svelte--convert-to-raw-string
-             (org-svelte--encode-plain-text code)))))
+            (org-svelte--convert-to-raw-string code))))
 
 (defun org-svelte-strike-through (_strike-through contents info)
   "Transcode a STRIKE-THROUGH element from Org to Svelte.
